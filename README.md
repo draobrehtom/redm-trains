@@ -1,6 +1,6 @@
 Here is what I managed to uncover:
 
-The train behaves differently depending on whether it is **migrated**. That is, if its owner has been changed, or as you called it "orphaned," the train begins to behave differently. For example, I tested the following scenario:
+The train behaves differently depending on whether it is **migrated**. That is, if its owner has been changed the train begins to behave differently. For example, I tested the following scenario:
 
 ### Scenario
 The train moves away from the owner and goes beyond the streaming range (owner's scope of 424.0 units). How will the train behave if:
@@ -13,11 +13,11 @@ The train moves away from the owner and goes beyond the streaming range (owner's
    - If it does not enter the scope of another player - **it continues moving** (i.e., it continues to exist even beyond the scope).
    - Enters the scope of another player - continues moving, but now belongs to the other player. Possible bugs with the train teleporting.
 
-2. **Migrated (orphaned) train leaves the new owner's scope:**
+2. **Migrated train leaves the new owner's scope:**
    - If the train does not enter the scope of another player - **it gets deleted**.
    - Enters the scope of another player - continues moving, but now belongs to the other player. Possible bugs with the train teleporting.
 
-**Conclusion:** There is a difference in the behaviour of the train when leaving the owner's scope - if the train leaves the original owner's scope versus if the train leaves the new owner's scope. 
+So there is a difference in the behaviour of the train when leaving the owner's scope - if the train leaves the original owner's scope versus if the train leaves the new owner's scope. 
 
 Some other issues I encountered during testing include:
 - **Missing train wagons**: Sometimes wagons disappear. This mainly happens during train migration.
