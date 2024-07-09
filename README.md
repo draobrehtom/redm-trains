@@ -17,7 +17,7 @@ The train moves away from the owner and goes beyond the streaming range (owner's
    - If the train does not enter the scope of another player - **it gets deleted**.
    - Enters the scope of another player - continues moving, but now belongs to the other player. Possible bugs with the train teleporting.
 
-**Conclusion: ** There is a difference in the behaviour of the train when leaving the owner's scope - if the train leaves the original owner's scope versus if the train leaves the new owner's scope. 
+**Conclusion:** There is a difference in the behaviour of the train when leaving the owner's scope - if the train leaves the original owner's scope versus if the train leaves the new owner's scope. 
 
 Some other issues I encountered during testing include:
 - **Missing train wagons**: Sometimes wagons disappear. This mainly happens during train migration.
