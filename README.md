@@ -4,7 +4,9 @@ The script allows you to have a constant train running on your server even if yo
 When there are no players on server or train is not in the scope of player - the train trajectory is simulate via `server/simulation.lua`.
 Train entity migration is handled via `server/sv_main.lua`.
 
-Code is highly unorganized - it's in a state of research and testing phase and was never finished as a final product. Since I left my attempts in finishing this my will is to share it to the public and hope this repository might be helpful for enthusiasts who are trying to make fully-working server-side trains for RedM.  
+Code is highly unorganized - it's in a state of research and testing phase and was never finished as a final product. You can find some piece of codes here and there, even there some observation notes about entity-migration during the development of script. 
+
+Since I left my attempts in finishing this my will is to share it to the public and hope this repository might be helpful for enthusiasts who are trying to make fully-working server-side trains for RedM.  
 
 I might be return to this proejct some day, but so far I'm waiting at lease a minimal feedback from RedM developers about the [train sync issue](https://github.com/citizenfx/fivem/issues/2630).
 
