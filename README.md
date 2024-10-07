@@ -1,142 +1,39 @@
-1) Баг с направлением поезда. Когда игрока подключился, то поезд изменил своё направление.
+Here is what I managed to uncover:
 
-Central Union Express stopped at Saint Denis Station (S)
-Date: 2023-10-26 14:43:27
+The train behaves differently depending on whether it is **migrated**. That is, if its owner has been changed the train begins to behave differently. For example, I tested the following scenario:
 
-murzea_alin @David.M42 jumped into virtual world #1
-Date: 2023-10-26 16:43:??
+### Scenario
+The train moves away from the owner and goes beyond the streaming range (owner's scope of 424.0 units). How will the train behave if:
+- It does not enter the scope of another player
+- It enters the scope of another player
 
-Central Union Express stopped at Saint Denis Station (R)
-Date: 2023-10-26 14:43:40
+### Test Results
 
-Central Union Express stopped at Emerald Station (R)
-Date: 2023-10-26 14:48:24
+1. **Non-migrated train leaves the owner's scope (original owner).**
+   - If it does not enter the scope of another player - **it continues moving** (i.e., it continues to exist even beyond the scope).
+   - Enters the scope of another player - continues moving, but now belongs to the other player. Possible bugs with the train teleporting.
 
-Это значит, что если поезд заспаунить до или после Saint Dennis, значит он поменяет своё напраление. Скорее всего поезд был заспаунен на ЖД Emerald по ошибке. А должен был быть заспаунен на ЖД Сейнт Дени.
+2. **Migrated train leaves the new owner's scope:**
+   - If the train does not enter the scope of another player - **it gets deleted**.
+   - Enters the scope of another player - continues moving, but now belongs to the other player. Possible bugs with the train teleporting.
 
-2) Далее я пробовал перезапускать скрипт (спаунив поезд в Saint Denis), я находился там-же. Другой игрок, изначальный владелец, находился в Валентайн. Так вот, когда я делал перезапуски/телепорт в другой мир у меня то-ли появлялся поезд без вагонов, то ли это был дубликат поезда.
+So there is a difference in the behaviour of the train when leaving the owner's scope - if the train leaves the original owner's scope versus if the train leaves the new owner's scope. 
 
-Что нужно сделать - удаление всех поезд через сервер, при остановке скрипта.
+Some other issues I encountered during testing include:
+- **Missing train wagons**: Sometimes wagons disappear. This mainly happens during train migration.
+- **Train teleportation**: Sometimes the train gets teleported to certain coordinates, which are defined in `trains3.dat`.
+- **Train migration and deletion**: When I create a train on Client 1, if the train is in Client 2's zone, closer to Client 2 than to Client 1, or not in the scope of Client 1, then the train migrates to Client 2 and immediately gets deleted.
 
-
-3) Поезда продублировались когда:
-- Поезд был у Валентайна, а я был на Rigs st.. У Валентайна находились два игрока.
-Я подлетел к Валентайну, поезд начал дёргаться. Далее он остановился. Далее поезд телепортировался чуть вперёд.
-Далее поезда продублировались (может быть и до этого они уже были продублированы). 
-Так-же в логах виднеется как один из игроков телепортировался в другой измерение.
-
-
-
----- Фиксы:
-Убрал удаление поезда при миграции, добавил логи. Теперь поезд должен плавно мигрировать с игрока на игрока, а если вдруг он телепортируется, тогда будет пересоздан. Возможны проблемы с пропаданием вагонов.
-
-Заново записал маршрут поезда, на этот раз с указателем направления. Так-же при ре-спауне поезд я всегда указываю его направление.
-
-# -- Дальнешее наблюдение:
-
-Поезд постоянно менял владельца и телепортировался
-Координаты поезда: vector3(890.5318, 763.1472, 107.6146)
-Телепортировался в vector3(2659.662, -429.2704, 42.57434)
-
-[x] Добавлены логи координат игроков, чтобы лучше понять где находятся игроки и как это вляет на миграцию
-[x] Добавлены логи количества вагонов у поезда
+![image](https://github.com/draobrehtom/redm-trains/assets/6503721/dcd96ee7-3541-45f0-903a-f34a151ddcf4)
 
 
-# 29.10.2023 Поезд пропал и не спаунится:
-Поезд остановился на координатах: vector3(1303.029, 758.7805, 95.5663)  (Пред. остановка в дискорд логах Heartland Oil Fields)
+Also, I mentioned possible teleportation bugs. Sometimes the train can teleport to specific points on the map, such as:
 
-Так-же при этом симуляция тоже не работает. Симуляция: {vector3(1301.362, 759.663, 94.76925), 0},
+Train train1 position suddenly changed for more than 400.0 (2711.560546875) units from vector3(28.9978, 224.9934, 108.0022) to vector3(2659.636, -429.244, 42.57434)
 
-TODO: Ошибка похоже в том, что игрок, на котором создавался поезд, отключился не отправив ответ серверу.
+These coordinates match the beginning of the trains3.dat file:
 
-[       script:trains] Server Trains    {"train1":3}
-[       script:trains] --------]
-[       script:trains] - Train owner quit from Routing Bucket #1
-[       script:trains] (Loop) Stopped (not existing or migrated):       train1
-[       script:trains] (Loop) Train migrated:   true
-[       script:trains] - Waiting for train deletion
-[       script:trains] [x] entityRemoved:       train1  3       [x] entityOwner:        train1  5       MrDingo
-[       script:trains] [x] First entity owner same as current one       5       MrDingo
-[       script:trains] - Previous owner doesnt exist / not in routing bucket #1
-[       script:trains] - No other players found for recreation of train
-[       script:trains] - Train recreation started       false
-[       script:trains] - Waiting for new players connecting to server
-[       script:trains] - Some player connected -  recreate train        train1  5       MrDingo
-[       script:trains] ... Get handle from net id       23
-[       script:trains] [--------
-[       script:trains] Created train by player  5       MrDingo TrainId and NetId       train1  23
-[       script:trains] Client trains    [{"netId":23}]
-[       script:trains] Server Trains    {"train1":23}
-[       script:trains] --------]
-[       script:trains] - Train owner quit from Routing Bucket #1
-[       script:trains] (Loop) Stopped (not existing or migrated):       train1
-[       script:trains] (Loop) Train migrated:   true
-[       script:trains] - Waiting for train deletion
-[       script:trains] [x] entityRemoved:       train1  23      [x] entityOwner:        train1  5       MrDingo
-[       script:trains] [x] First entity owner same as current one       5       MrDingo
-[       script:trains] - Previous owner doesnt exist / not in routing bucket #1
-[       script:trains] - No other players found for recreation of train
-[       script:trains] - Train recreation started       false
-[       script:trains] - Waiting for new players connecting to server
-[     script:zconcept] Disconnected [✓]:       MrDingo
-[     script:zconcept] Connecting [𐄂]:        Max Mullen
-[     script:zconcept] Connected [✓]:  Max Mullen
-[     script:zconcept] Disconnected [✓]:       Max Mullen
-[     script:zconcept] Connecting [𐄂]:        Max Mullen
-[     script:zconcept] Connected [✓]:  Max Mullen
-[script:discord-roles] Discord roles synced for player   7
-[     script:zconcept] Disconnected [✓]:       Max Mullen
-[     script:zconcept] Connecting [𐄂]:        Max Mullen
-[     script:zconcept] Connected [✓]:  Max Mullen
-[script:discord-roles] Discord roles synced for player   8
-[ citizen-server-impl] sync thread hitch warning: timer interval of 116 milliseconds
-[     script:zconcept] Disconnected [✓]:       Max Mullen
-[     script:zconcept] Connecting [𐄂]:        Max Mullen
-[     script:zconcept] Connected [✓]:  Max Mullen
-[script:discord-roles] Discord roles synced for player   9
-[     script:zconcept] Disconnected [✓]:       Max Mullen
-[ citizen-server-impl] sync thread hitch warning: timer interval of 139 milliseconds
-[ citizen-server-impl] server thread hitch warning: timer interval of 161 milliseconds
-[     script:zconcept] Connecting [𐄂]:        Max Mullen
-[     script:zconcept] Connected [✓]:  Max Mullen
-[script:discord-roles] Discord roles synced for player   10
-[     script:zconcept] Disconnected [✓]:       Max Mullen
-[     script:zconcept] Connecting [𐄂]:        Max Mullen
-[     script:zconcept] Connected [✓]:  Max Mullen
-[script:discord-roles] Discord roles synced for player   11
-[     script:zconcept] Disconnected [✓]:       Max Mullen
-[     script:zconcept] Connecting [𐄂]:        Haezakmi
-[     script:zconcept] Connecting [𐄂]:        Haezakmi
-[     script:zconcept] Connected [✓]:  Haezakmi
-[script:discord-roles] Discord roles synced for player   12
-[       script:trains] - Some player connected -  recreate train        train1  12      Haezakmi
-[ citizen-server-impl] server thread hitch warning: timer interval of 189 milliseconds
-[     script:zconcept] Connecting [𐄂]:        Mateus Kiev
-
-[x] Добавил отслеживание бага
-[x] Перезапустил скрипт, ведётся дальнешее наблюдение
-
-```lua
-
-CreateThread(function()
-    while true do
-        Wait(5000)
-        if getSomePlayer() then
-            for trainId,netId in pairs(Trains) do
-                if not DoesEntityExist(NetworkGetEntityFromNetworkId(netId)) then
-                    sendToDiscordDebugInfo(nil, ('**[POSSIBLE BUG]** Train **%s** does not exist, despite that there are player candidates for train creation.'):format(trainId))
-                end
-            end
-        end
-    end
-end)
 ```
-
-
-# Наблюдение о пропадающих вагонах
-
-1. Добавленные логи о количестве вагонов не срабатывают на новом владельце поезда (false).
-Это происходит из-за того, что старый владелец ушёл в другой мир, а поезд при этом был пересоздан.
-
-
-2. Когда я владея поездом выхожу из мира в другой (он мигигрует на игрока), затем - обратно, поезд спаунится без вагонов.
+147 142 open
+c 2659.79 -435.711 42.5659 2659.79 -435.711 42.5659 2659.12 -413.096 42.6814 72.8832 8 freight_group
+```
