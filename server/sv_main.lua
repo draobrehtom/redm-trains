@@ -33,7 +33,7 @@ RegisterNetEvent("Trains.Created", function(trainId, netId, trainsClientInfo)
     print('Created train by player', playerId, GetPlayerName(playerId), 'TrainId and NetId', trainId, netId)
     print('Client trains', json.encode(trainsClientInfo))
 
-
+    SetEntityOrphanMode(handle, 2) -- Prevent entity deletion
 
     Entity(handle).state:set('trainId', trainId, true)
 
