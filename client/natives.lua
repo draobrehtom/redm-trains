@@ -21,3 +21,13 @@ end
 function SetTrainMaxSpeed(...)
     Citizen.InvokeNative(0x9F29999DFDF2AEB8, ...)
 end
+
+-- Declared as Any: answers with the number 0 while loading, which is truthy in Lua.
+function HasTrainLoaded(train)
+    local loaded = Citizen.InvokeNative(0xBD3C4A2ED509205E, train)
+    return loaded == true or loaded == 1
+end
+
+function PreventNetworkIdMigration(netId)
+    Citizen.InvokeNative(0x7182EDDA1EE7DB5A, netId)
+end

@@ -113,8 +113,32 @@ RegisterNetEvent('trains:createTrain', function(trainId, coords, direction)
         Wait(0)
     end
 
-    --todo: test
-    --Citizen.InvokeNative(0x7182EDDA1EE7DB5A, netId) -- PreventNetworkIdMigration
+    -- Carriages attach a few frames after the engine; until then GetTrainCarriage is empty.
+    while not HasTrainLoaded(trainHandle) do Wait(0) end
+
+    -- The server sees no link between the cars (RDR3 train sync node is not
+    -- parsed), so every car is reported and protected on its own.
+    local carNetIds = {}
+    local trailerNumber = Citizen.InvokeNative(0x60B7D1DCC312697D, trainHandle)
+    for i = 0, trailerNumber - 1 do
+        local car = GetTrainCarriage(trainHandle, i)
+        if DoesEntityExist(car) then
+            local carNetId = NetworkGetNetworkIdFromEntity(car)
+            while not NetworkDoesNetworkIdExist(carNetId) do
+                Wait(0)
+                carNetId = NetworkGetNetworkIdFromEntity(car)
+            end
+            carNetIds[#carNetIds + 1] = carNetId
+        end
+    end
+
+    -- Blocks the game's own proximity hand-over (CanPassControl). The server-side
+    -- hand-over is blocked by Config.CullingRadius, the disconnect one by
+    -- recreating the train.
+    PreventNetworkIdMigration(netId)
+    for _, carNetId in ipairs(carNetIds) do
+        PreventNetworkIdMigration(carNetId)
+    end
 
     -- debug info
     local trainsInfo = {}
@@ -126,7 +150,7 @@ RegisterNetEvent('trains:createTrain', function(trainId, coords, direction)
     end
     -------------
     
-    TriggerServerEvent("Trains.Created", found.trainid, netId, trainsInfo)
+    TriggerServerEvent("Trains.Created", found.trainid, netId, carNetIds, trainsInfo)
 end)
 
 -------------------------------------------------------------------------------

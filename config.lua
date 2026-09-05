@@ -7,6 +7,14 @@ end
 Config.Debug = false
 
 Config.RoutingBucket = 0
+
+-- OneSync hands an entity to another player as soon as its owner no longer has
+-- it in culling range (server, ServerGameState.cpp `wantsReassign`). A migrated
+-- train arrives on the new owner with an invalid train config index (no
+-- carriages) and snaps to track node 0 (RedM has no RDR3 port of the FiveM
+-- `CTrain::SetTrainCoord` fix). Keeping every car inside the owner's culling
+-- range is what stops that migration; the radius covers the whole map.
+Config.CullingRadius = 20000.0
 Config.TrainSetup = {
 
     -- trains

@@ -1,4 +1,38 @@
+-- trainId -> { netId = engine net id, cars = { every car net id, engine included } }
+-- The server cannot walk a train (RDR3 train sync node is not parsed, every
+-- train helper in ServerGameState is #ifdef STATE_FIVE), so the cars reported
+-- by the client are the only way to reach them.
 Trains = {}
+
+local ORPHAN_DELETE_ON_OWNER_DISCONNECT = 1
+
+function getTrainEngine(trainId)
+    local train = Trains[trainId]
+    if not train then return nil end
+
+    local handle = NetworkGetEntityFromNetworkId(train.netId)
+    if handle == 0 or not DoesEntityExist(handle) then return nil end
+
+    return handle
+end
+
+-- DELETE_TRAIN only reaches the engine on RDR3 (carriage recursion is
+-- STATE_FIVE), so every car goes separately.
+function deleteTrainEntities(trainId)
+    local train = Trains[trainId]
+    if not train then return 0 end
+
+    local deleted = 0
+    for _, netId in ipairs(train.cars) do
+        local handle = NetworkGetEntityFromNetworkId(netId)
+        if handle ~= 0 and DoesEntityExist(handle) then
+            DeleteEntity(handle)
+            deleted = deleted + 1
+        end
+    end
+
+    return deleted
+end
 
 function checkTrains()
     print('[xx] Check other trains:')
@@ -13,7 +47,7 @@ function checkTrains()
     print('All vehicles', json.encode(GetAllVehicles()))
 end
 
-RegisterNetEvent("Trains.Created", function(trainId, netId, trainsClientInfo)
+RegisterNetEvent("Trains.Created", function(trainId, netId, carNetIds, trainsClientInfo)
     local playerId = source
 
     local handle = 0
@@ -23,21 +57,33 @@ RegisterNetEvent("Trains.Created", function(trainId, netId, trainsClientInfo)
         print('... Get handle from net id', netId)
     end
 
-    if Trains[trainId] and DoesEntityExist(NetworkGetEntityFromNetworkId(Trains[trainId])) then
+    if getTrainEngine(trainId) then
         print('Cancel train creation due to that train already exists', trainId)
-        DeleteEntity(handle)
+        for _, carNetId in ipairs(carNetIds) do
+            local car = NetworkGetEntityFromNetworkId(carNetId)
+            if car ~= 0 and DoesEntityExist(car) then DeleteEntity(car) end
+        end
         return
     end
 
     print('[--------')
-    print('Created train by player', playerId, GetPlayerName(playerId), 'TrainId and NetId', trainId, netId)
+    print('Created train by player', playerId, GetPlayerName(playerId), 'TrainId and NetId', trainId, netId, 'cars', json.encode(carNetIds))
     print('Client trains', json.encode(trainsClientInfo))
 
-    SetEntityOrphanMode(handle, 2) -- Prevent entity deletion
+    -- Per car: the train lives exactly as long as its creator (a migrated clone
+    -- has no carriages and a wrong position, so it is recreated instead), and
+    -- stays inside the creator's culling range so the server never hands it over.
+    for _, carNetId in ipairs(carNetIds) do
+        local car = NetworkGetEntityFromNetworkId(carNetId)
+        if car ~= 0 and DoesEntityExist(car) then
+            SetEntityOrphanMode(car, ORPHAN_DELETE_ON_OWNER_DISCONNECT)
+            SetEntityDistanceCullingRadius(car, Config.CullingRadius)
+        end
+    end
 
     Entity(handle).state:set('trainId', trainId, true)
 
-    Trains[trainId] = netId
+    Trains[trainId] = { netId = netId, cars = carNetIds }
 
     print('Server Trains', json.encode(Trains))
     print('--------]')
@@ -65,40 +111,31 @@ RegisterNetEvent("Trains.Created", function(trainId, netId, trainsClientInfo)
                 prevAt = GetGameTimer()
             end
 
-            -- Possibly not needed (with in-game train migration to other player - we avoid manual recreation)
+            -- A clone on another owner has no carriages and sits on track node 0
+            -- (engine-level, see Config.CullingRadius). Whatever slipped past the
+            -- guards is recreated, not kept.
             if lastOwner ~= newOwner then
                 sendToDiscordDebugInfo(nil, ('Train **%s** changed owner from (%s)**[%s]** to (%s)**[%s]**\n\nLast owner **[%s]** at %s\nNew owner **[%s]** at %s'):format(
-                    trainId, 
-                    GetPlayerName(lastOwner), 
-                    lastOwner, 
-                    GetPlayerName(newOwner), 
+                    trainId,
+                    GetPlayerName(lastOwner),
+                    lastOwner,
+                    GetPlayerName(newOwner),
                     newOwner,
                     lastOwner, GetEntityCoords(GetPlayerPed(lastOwner)),
                     newOwner, GetEntityCoords(GetPlayerPed(newOwner))
                 ))
-
-                -- print('Owner changed:', trainId, 'Last owner', lastOwner, GetPlayerName(lastOwner), 'New owner', newOwner, GetPlayerName(newOwner))
-                -- local previousOwnerCoords = GetEntityCoords(GetPlayerPed(lastOwner))
-                -- local newOwnerCoords = GetEntityCoords(GetPlayerPed(newOwner))
-                -- local prevOwnerToTrainDist = #(previousCoords.xy - previousOwnerCoords.xy)
-                -- local newOwnerToTrainDist = #(previousCoords.xy - newOwnerCoords.xy)
-                -- print('1) Dist between last owner and train:', prevOwnerToTrainDist)
-                -- print('2) Dist between new owner and train:', newOwnerToTrainDist)
-                -- print('3) Dist between owners:', #(previousOwnerCoords.xy - newOwnerCoords.xy))
-                -- print('- Manualy delete train (1):')
-                -- DeleteEntity(handle)
-                -- trainMigrated = true
+                print('- Recreating train (1): owner changed')
+                deleteTrainEntities(trainId)
+                trainMigrated = true
             end
-            
+
             local dist = #(previousCoords - coords)
             if dist > 400.0 then
                 print('- Train position suddenly changed for more than 400.0 units.', coords)
                 local msg = ('Train **%s** position suddenly changed for more than 400.0 (%s) units (%s -> %s)'):format(trainId, dist, previousCoords, coords)
                 sendToDiscordDebugInfo(nil, msg)
                 print('- Recreating train (2):')
-                if DoesEntityExist(handle) then
-                    DeleteEntity(handle)
-                end
+                deleteTrainEntities(trainId)
                 trainMigrated = true
             end
 
@@ -106,7 +143,7 @@ RegisterNetEvent("Trains.Created", function(trainId, netId, trainsClientInfo)
                 print(('- Train owner quit from Routing Bucket #%s'):format(Config.RoutingBucket))
                 local msg = ('Train **%s** owner (%s)[%s] quit from Routing Bucket #%s'):format(trainId, GetPlayerName(lastOwner), lastOwner, Config.RoutingBucket)
                 sendToDiscordDebugInfo(nil, msg)
-                DeleteEntity(handle)
+                deleteTrainEntities(trainId)
                 trainMigrated = true
             end
 
@@ -248,12 +285,8 @@ end)
 
 
 RegisterCommand('deltrains', function(source, args)
-    for k,v in pairs(Trains) do
-        local handle = NetworkGetEntityFromNetworkId(v)
-        if DoesEntityExist(handle) then
-            DeleteEntity(handle)
-            print('Delete', k, 'net', v, 'handle', handle)
-        end
+    for trainId, train in pairs(Trains) do
+        print('Delete', trainId, 'net', train.netId, 'cars', deleteTrainEntities(trainId))
     end
 end)
 
@@ -386,14 +419,15 @@ CreateThread(function()
 
         if Config.Debug then
             -- Display only entity position
-            for trainId,netId in pairs(Trains) do
-                local handle = NetworkGetEntityFromNetworkId(netId)
-                local trainCoords = GetEntityCoords(handle)
-                table.insert(data.trains, {
-                    trainId = trainId,
-                    trainCoords = trainCoords,
-                    trainOwner = GetPlayerName(NetworkGetEntityOwner(handle)),
-                })
+            for trainId in pairs(Trains) do
+                local handle = getTrainEngine(trainId)
+                if handle then
+                    table.insert(data.trains, {
+                        trainId = trainId,
+                        trainCoords = GetEntityCoords(handle),
+                        trainOwner = GetPlayerName(NetworkGetEntityOwner(handle)),
+                    })
+                end
             end
         else
             -- Display entity position / simulated position
@@ -402,8 +436,7 @@ CreateThread(function()
                 local trainCoords = nil
                 local trainOwner = '-1'
 
-                local netId = Trains[trainId]
-                local handle = netId and NetworkGetEntityFromNetworkId(netId)
+                local handle = getTrainEngine(trainId)
                 if handle then
                     trainCoords = GetEntityCoords(handle)
                     trainOwner = GetPlayerName(NetworkGetEntityOwner(handle))
@@ -452,12 +485,8 @@ end)
 
 AddEventHandler('onResourceStop', function(name)
     if name == GetCurrentResourceName() then
-        for k,v in pairs(Trains) do
-            local handle = NetworkGetEntityFromNetworkId(v)
-            if DoesEntityExist(handle) then
-                DeleteEntity(handle)
-                print('Delete train', train1)
-            end
+        for trainId in pairs(Trains) do
+            print('Delete train', trainId, 'cars', deleteTrainEntities(trainId))
         end
     end
 end)
@@ -468,8 +497,8 @@ RegisterNetEvent('trains:onRequestedTrailersInfo', function(netId, trailersAmoun
     print(netId, trailersAmount)
 
     local trainId = nil
-    for k,v in pairs(Trains) do
-        if tostring(v) == tostring(netId) then
+    for k, train in pairs(Trains) do
+        if tostring(train.netId) == tostring(netId) then
             trainId = k
             break
         end
@@ -511,8 +540,8 @@ CreateThread(function()
     while true do
         Wait(5000)
         if getSomePlayer() then
-            for trainId,netId in pairs(Trains) do
-                if not DoesEntityExist(NetworkGetEntityFromNetworkId(netId)) then
+            for trainId in pairs(Trains) do
+                if not getTrainEngine(trainId) then
                     sendToDiscordDebugInfo(nil, ('**[POSSIBLE BUG]** Train **%s** does not exist, despite that there are player candidates for train creation.'):format(trainId))
                 end
             end
